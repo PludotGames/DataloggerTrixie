@@ -129,7 +129,9 @@ if stel_vraag "Wil je nu data importeren van een andere (Bookworm) Raspberry Pi?
     echo "-------------------------------------------------------------"
     echo "VOER DEZE COMMANDO'S UIT OP DE BOOKWORM PI (BRON):"
     echo "1. Backup maken:"
-    echo "   sudo mysqldump -u root -p temperatures > $BACKUP_NAAM"
+    echo "   sudo mysqldump -u root -p temperatures > ~/temperaturesdump_$(date +%Y%m%d%H%M).sql"
+    echo "   of"
+    echo "   sudo mysqldump -u root -p temperatures > temperaturesdump_`date +%Y%m%d%H%M`.sql"
     echo "2. Kopieer naar deze Pi:"
     echo "   scp $BACKUP_NAAM $USER@$IP_TRIXIE:~/"
     echo "-------------------------------------------------------------"
@@ -175,5 +177,5 @@ _EOF_"
 fi
 
 print_titel "INSTALLATIE VOLTOOID!"
-echo "Bezoek je dashboard op: http://$(hostname -I | awk '{print $1}')"
+echo "Bezoek je website op: http://$(hostname -I | awk '{print $1}')"
 echo "Beheer je scripts in: $BASH_DEST"
