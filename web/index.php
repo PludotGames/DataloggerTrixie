@@ -1,62 +1,60 @@
-<?php
-// Settings
-// host, user and password settings
-$host = "localhost";
-$user = "logger";
-$password = "paswoord";
-$database = "temperatures";
-
-//Tot hoeveel uur terug wil je de data tonen wanneer dit php opgevraagd wordt vanuit browser
-$hours = 24;
-
-// make connection to database
-$connectdb = mysqli_connect($host,$user,$password)
-or die ("Cannot reach database");
-
-// select db
-mysqli_select_db($connectdb,$database)
-or die ("Cannot select database");
-
-// sql command that selects all entires from current time and X hours backwards
-$sql="SELECT * FROM temperaturedata WHERE dateandtime >= (NOW() - INTERVAL $hours HOUR) order by dateandtime desc";
-
-//NOTE: If you want to show all entries from current date in web page uncomment line below by removing //
-//$sql="select * from temperaturedata where date(dateandtime) = curdate();";
-
-// set query to variable
-$temperatures = mysqli_query($connectdb,$sql);
-
-// create content to web page
-?>
-
+<!DOCTYPE html>
 <html>
-<head>
-        <title>Klastemperatuur van Raspi25</title>
-</head>
-<body>
-
-  <h3>Temperatuur en vochtigheid - data </h3>
-    <br>
-        <table width="800" border="1" cellpadding="1" cellspacing="1" align="center">
-                        <tr>
-                        <th>Date</th>
-                        <th>Sensor</th>
-                        <th>Temperature</th>
-                        <th>Humidity</th>
-                        <tr>
-
-                        <?php
-                                // loop all the results that were read from database and "draw" to web page
-                                while($temperature=mysqli_fetch_assoc($temperatures)){
-                                echo "<tr>";
-                                echo "<td>".$temperature['dateandtime']."</td>";
-                                echo "<td>".$temperature['sensor']."</td>";
-                                echo "<td>".$temperature['temperature']."</td>";
-                                echo "<td>".$temperature['humidity']."</td>";
-                                echo "<tr>";
-                                }
-                        ?>
-                </table>
-
-</body>
+    <head>
+        <title>Temperatuurlogger</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <style>
+            body{
+                margin-top: 80px;
+            }
+            .carousel {
+                min-height: 650px;
+                background-color: #f0f0f0;
+            }
+            .carousel-item img {
+                height: 600px;
+                object-fit: contain;
+            }
+            .carousel-caption{
+                color:black;
+            }
+        </style>
+    </head>
+    <body>
+        <?php include 'Navbar.php' ?>
+        <div class="container-fluid mt-4">
+        <h2>Temperatuur Grafieken</h2>
+        <div id="caroussel" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-indicators">
+        <button type="button" data-bs-target="#caroussel" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Slide 1"></button>
+        <button type="button" data-bs-target="#caroussel" data-bs-slide-to="1" aria-label="Slide 2"></button>
+        </div>
+        <div class="carousel-inner">
+        <div class="carousel-item active">
+        <img src="Assets/DagTemperatuur.png" class="d-block w-100" alt="Dagtemperatuur">
+        <div class="carousel-caption d-none d-md-block">
+        <h5>Dagtemperatuur</h5>
+        </div>
+        </div>
+        <div class="carousel-item">
+        <img src="Assets/WeekTemperatuur.png" class="d-block w-100" alt="Weektemperatuur">
+        <div class="carousel-caption d-none d-md-block">
+        <h5>Weektemperatuur</h5>
+        </div>
+        </div>
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#caroussel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#caroussel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+        </button>
+        </div>
+        </div>
+    </body>
+    <footer>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    </footer>
 </html>
