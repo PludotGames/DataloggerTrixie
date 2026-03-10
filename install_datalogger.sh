@@ -3,23 +3,35 @@
 # =================================================================
 # Installatiescript voor Datalogger - Raspberry Pi OS (Trixie)
 # Met Data Migratie Module (Bookworm -> Trixie)
+# Bronnen: github.com/PludotGames/DataloggerTrixie
 # JMO 09/03/2026
 # =================================================================
 
 # Stop direct bij fouten
 set -e
 
-# Voorkom interactieve vragen (Niet-interactieve modus)
+# Voorkom interactieve vragen
 export DEBIAN_FRONTEND=noninteractive
 
-# Functie voor een duidelijke sectietitel
+# -----------------------------------------------------------------
+# CONFIGURATIE
+# -----------------------------------------------------------------
+REPO_URL="https://github.com/PludotGames/DataloggerTrixie.git"
+REPO_DIR="$HOME/.datalogger_repo"
+BASH_DEST="$HOME/bashscripts"
+PYTHON_DEST="$HOME/pythonscripts"
+WEB_DEST="$HOME/web"
+VENV="$PYTHON_DEST/dhtvenv"
+
+# -----------------------------------------------------------------
+# HULPFUNCTIES
+# -----------------------------------------------------------------
 print_titel() {
     echo -e "\n*************************************************************"
     echo "  $1"
     echo "*************************************************************"
 }
 
-# Functie voor ja/nee vragen
 stel_vraag() {
     read -p "$1 (j/N): " antwoord
     if [[ "${antwoord,,}" == "j" || "${antwoord,,}" == "ja" ]]; then
@@ -35,23 +47,24 @@ stel_vraag() {
 clear
 print_titel "Datalogger Installatie & Migratie (Trixie)"
 
-REPO_DIR=$(pwd)
-BASH_DEST="$HOME/bashscripts"
-PYTHON_DEST="$HOME/pythonscripts"
-WEB_DEST="$HOME/web"
-
 echo "GEPLANDE MAPPENSTRUCTUUR:"
 echo " - Scripts & Docs: $BASH_DEST"
 echo " - Python Logica:  $PYTHON_DEST"
 echo " - Web Design:     $WEB_DEST"
+echo "============================================================="
+echo ""
+echo "BRONREPOSITORY:"
+echo " $REPO_URL"
 echo "============================================================="
 
 # Hardware Veiligheid Check
 echo -e "\n   BELANGRIJK: HARDWARE VEILIGHEID!"
 echo "Sluit NOOIT sensoren aan terwijl de Pi aan staat."
 echo "-------------------------------------------------------------"
-echo "1. DHT22 op GPIO pin 22 (Pin 15)?"
-echo "2. Voeding op 3.3V (Pin 1) en GND (Pin 14)?"
+echo "Aansluitschema DHT22:"
+echo "  VCC  -> Pin 1  (3.3V)"
+echo "  Data -> Pin 15 (GPIO 22)"
+echo "  GND  -> Pin 14 (Ground)"
 echo "-------------------------------------------------------------"
 
 if ! stel_vraag "Is de hardware veilig aangesloten en wil je de installatie starten?"; then
@@ -60,23 +73,53 @@ if ! stel_vraag "Is de hardware veilig aangesloten en wil je de installatie star
 fi
 
 # -----------------------------------------------------------------
-# STAP 1: Mappen en Bestanden organiseren
+# STAP 1: Repository ophalen & Bestanden organiseren
 # -----------------------------------------------------------------
-if stel_vraag "Stap 1: Bestanden organiseren naar de nieuwe mappenstructuur?"; then
-    print_titel "STAP 1: BESTANDEN ORGANISEREN"
+if stel_vraag "Stap 1: Bestanden ophalen van GitHub en organiseren?"; then
+    print_titel "STAP 1: REPOSITORY & BESTANDEN ORGANISEREN"
+
+    # Zorg dat git aanwezig is
+    if ! command -v git &>/dev/null; then
+        echo "git niet gevonden, wordt geinstalleerd..."
+        sudo apt-get install -y git
+    fi
+
+    # Clone of update de repository
+    if [ -d "$REPO_DIR/.git" ]; then
+        echo "Repository bestaat al, bijwerken..."
+        git -C "$REPO_DIR" pull --quiet
+        echo "Repository bijgewerkt."
+    else
+        echo "Repository ophalen van GitHub..."
+        rm -rf "$REPO_DIR"
+        git clone --quiet "$REPO_URL" "$REPO_DIR"
+        echo "Repository gekloond."
+    fi
+
+    # Doelmappen aanmaken
     mkdir -p "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST"
 
-    cp "$REPO_DIR/install_datalogger.sh" "$BASH_DEST/" 2>/dev/null || true
-    cp "$REPO_DIR/README.md" "$BASH_DEST/" 2>/dev/null || true
+    # Installatiescript en README naar bashscripts
+    cp "$0" "$BASH_DEST/install_datalogger.sh" 2>/dev/null || true
+    [ -f "$REPO_DIR/README.md" ] && cp "$REPO_DIR/README.md" "$BASH_DEST/" && echo "README.md gekopieerd."
 
+    # Python scripts vanuit de repository
     if [ -d "$REPO_DIR/pythonscripts" ]; then
         cp "$REPO_DIR/pythonscripts/"*.py "$PYTHON_DEST/" 2>/dev/null || true
+        echo "Python scripts gekopieerd van GitHub naar $PYTHON_DEST."
+    else
+        echo "Geen pythonscripts map gevonden in de repository (overgeslagen)."
     fi
 
+    # Webbestanden vanuit de repository
     if [ -d "$REPO_DIR/web" ]; then
         cp -r "$REPO_DIR/web/"* "$WEB_DEST/" 2>/dev/null || true
+        echo "Webbestanden gekopieerd van GitHub naar $WEB_DEST."
+    else
+        echo "Geen web map gevonden in de repository (overgeslagen)."
     fi
-    echo "Bestanden zijn verplaatst naar $HOME."
+
+    echo "Bestanden zijn georganiseerd in $HOME."
 fi
 
 # -----------------------------------------------------------------
@@ -88,12 +131,26 @@ if stel_vraag "Stap 2: Systeem updaten en software (Apache, PHP, MariaDB) instal
 
     sudo apt-get update -y
 
-    # Directe aanroep van opties om dpkg errors te voorkomen
-    sudo apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+    sudo apt-get upgrade -y \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold"
 
-    sudo apt-get install -y apache2 php php-mysql mariadb-server \
-                         python3-venv python3-pip libopenblas-dev \
-                         python3-dev pkg-config
+    sudo apt-get install -y \
+        apache2 \
+        php \
+        php-mysql \
+        mariadb-server \
+        python3-venv \
+        python3-pip \
+        libopenblas-dev \
+        python3-dev \
+        pkg-config \
+        libgpiod2
+
+    # Services activeren
+    sudo systemctl enable --now apache2 mariadb 2>/dev/null || true
+
+    echo "Alle software is geinstalleerd en services zijn gestart."
 fi
 
 # -----------------------------------------------------------------
@@ -101,6 +158,7 @@ fi
 # -----------------------------------------------------------------
 if stel_vraag "Stap 3: MariaDB Database en Tabel inrichten?"; then
     print_titel "STAP 3: DATABASE CONFIGURATIE"
+
     sudo mariadb -u root <<_EOF_
 CREATE DATABASE IF NOT EXISTS temperatures;
 CREATE USER IF NOT EXISTS 'logger'@'localhost' IDENTIFIED BY 'paswoord';
@@ -114,6 +172,7 @@ CREATE TABLE IF NOT EXISTS temperaturedata (
     humidity DOUBLE
 );
 _EOF_
+
     echo "Database 'temperatures' en tabel 'temperaturedata' zijn gereed."
 fi
 
@@ -122,10 +181,18 @@ fi
 # -----------------------------------------------------------------
 if stel_vraag "Stap 4: Python Virtual Environment (venv) instellen?"; then
     print_titel "STAP 4: PYTHON OMGEVING"
-    python3 -m venv "$PYTHON_DEST/dhtvenv"
+
+    python3 -m venv "$VENV"
+    echo "Virtual environment aangemaakt in $VENV."
+
     echo "Libraries installeren (Adafruit DHT, Matplotlib, MySQL)..."
-    "$PYTHON_DEST/dhtvenv/bin/python" -m pip install --upgrade pip
-    "$PYTHON_DEST/dhtvenv/bin/python" -m pip install adafruit-circuitpython-dht matplotlib mysql-connector-python
+    "$VENV/bin/python" -m pip install --upgrade pip --quiet
+    "$VENV/bin/python" -m pip install --quiet \
+        adafruit-circuitpython-dht \
+        matplotlib \
+        mysql-connector-python
+
+    echo "Alle Python libraries zijn geinstalleerd."
 fi
 
 # -----------------------------------------------------------------
@@ -134,83 +201,123 @@ fi
 print_titel "DATA MIGRATIE MODULE"
 if stel_vraag "Wil je nu data importeren van een andere (Bookworm) Raspberry Pi?"; then
     IP_TRIXIE=$(hostname -I | awk '{print $1}')
-    BACKUP_CMD="sudo mysqldump -u root -p temperatures > ~/temperaturesdump_\$(date +%Y%m%d%H%M).sql"
 
     echo "-------------------------------------------------------------"
-    echo "VOER DIT UIT OP DE OUDE PI (BRON):"
-    echo "1. Backup maken:"
-    echo "   $BACKUP_CMD"
-    echo "2. Kopieer naar deze Pi (vervang de bestandsnaam):"
-    echo "   scp ~/temperaturesdump_*.sql $USER@$IP_TRIXIE:~/"
+    echo "STAP A - VOER DIT UIT OP DE OUDE PI (BRON / BOOKWORM):"
+    echo ""
+    echo "  1. Backup maken:"
+    echo "     sudo mysqldump -u root -p temperatures > ~/temperaturesdump_\$(date +%Y%m%d%H%M).sql"
+    echo ""
+    echo "  2. Kopieren naar deze Pi:"
+    echo "     scp ~/temperaturesdump_*.sql $USER@$IP_TRIXIE:~/"
     echo "-------------------------------------------------------------"
-    echo "VOER DIT UIT OP DEZE PI (TRIXIE) NA DE OVERDRACHT:"
-    echo "   mariadb -u root -p temperatures < ~/temperaturesdump_*.sql"
+    echo "STAP B - VOER DIT UIT OP DEZE PI (TRIXIE) NA DE OVERDRACHT:"
+    echo ""
+    echo "  mariadb -u root -p temperatures < ~/temperaturesdump_*.sql"
     echo "-------------------------------------------------------------"
+    echo ""
 
-    read -p "Druk op [Enter] zodra je klaar bent om verder te gaan..."
+    # Zoek automatisch naar .sql bestanden in de home map
+    SQL_BESTANDEN=("$HOME"/*.sql)
+    if [ -e "${SQL_BESTANDEN[0]}" ]; then
+        echo "Gevonden .sql bestanden in je home map:"
+        for f in "${SQL_BESTANDEN[@]}"; do
+            echo "  -> $(basename "$f")"
+        done
+        echo ""
+        if stel_vraag "Wil je nu een van deze bestanden importeren?"; then
+            read -p "Voer de volledige bestandsnaam in (bijv. ~/temperaturesdump_202501.sql): " SQL_BESTAND
+            SQL_BESTAND="${SQL_BESTAND/#\~/$HOME}"
+            if [ -f "$SQL_BESTAND" ]; then
+                echo "Importeren van $SQL_BESTAND ..."
+                sudo mariadb temperatures < "$SQL_BESTAND"
+                RIJEN=$(sudo mariadb -N -e "SELECT COUNT(*) FROM temperatures.temperaturedata;" 2>/dev/null || echo "?")
+                echo "Import geslaagd! Aantal rijen in tabel: $RIJEN"
+            else
+                echo "Bestand niet gevonden: $SQL_BESTAND (later handmatig importeren)."
+            fi
+        fi
+    else
+        read -p "Druk op [Enter] zodra je klaar bent met de overdracht en verder wil gaan..."
+    fi
 fi
 
 # -----------------------------------------------------------------
 # STAP 5: Webserver Inrichten
 # -----------------------------------------------------------------
-if stel_vraag "Stap 5: Jouw web-ontwerp naar de webroot (/var/www/html) kopiëren?"; then
+if stel_vraag "Stap 5: Web-ontwerp naar de webroot (/var/www/html) kopieren?"; then
     print_titel "STAP 5: WEBSERVER CONFIGURATIE"
 
-    # Maak de benodigde mappen aan
+    # Benodigde mappen aanmaken
     sudo mkdir -p /var/www/html/afbeeldingen
 
-    # TEST: Bestaat de standaard Apache index.html? Zo ja, verwijder deze.
+    # Standaard Apache index.html verwijderen indien aanwezig
     if [ -f /var/www/html/index.html ]; then
-        echo "Standaard Apache index.html gevonden. Bezig met verwijderen..."
+        echo "Standaard Apache index.html gevonden, wordt verwijderd..."
         sudo rm /var/www/html/index.html
     fi
 
-    # Kopieer jouw bestanden naar de webroot
-    if [ -d "$WEB_DEST" ]; then
+    # Webbestanden kopieren naar de webroot
+    if [ -d "$WEB_DEST" ] && [ "$(ls -A "$WEB_DEST" 2>/dev/null)" ]; then
         sudo cp -r "$WEB_DEST/"* /var/www/html/ 2>/dev/null || true
+        echo "Webbestanden gekopieerd naar /var/www/html/."
+    else
+        echo "Geen webbestanden gevonden in $WEB_DEST (overgeslagen)."
     fi
 
-    # Rechten goedzetten zodat de webserver alles kan lezen en schrijven
+    # Rechten instellen voor de webserver
     sudo chown -R www-data:www-data /var/www/html/
     sudo chmod -R 775 /var/www/html/
 
-    echo "Webserver is ingericht en de oude index.html is opgeruimd."
+    sudo systemctl reload apache2
+    echo "Webserver is ingericht."
 fi
 
-
 # -----------------------------------------------------------------
-# STAP 6: Automatisering (Cron via crontab -e methode)
+# STAP 6: Automatisering (Cron via crontab)
 # -----------------------------------------------------------------
 if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
-    print_titel "STAP 6: AUTOMATISERING (crontab -e stijl)"
+    print_titel "STAP 6: AUTOMATISERING (CRON)"
 
-    # 1. Bestaande crontab ophalen, maar oude regels van dit project verwijderen
-    # Zo voorkomen we dubbele regels als het script vaker wordt gedraaid.
-    crontab -l 2>/dev/null | grep -v "pythonscripts" | grep -v "Raspi25Temperatuur.png" > temp_cron || true
+    # Bestaande crontab ophalen maar oude regels van dit project verwijderen
+    # (zodat herinstallatie geen dubbele regels geeft)
+    crontab -l 2>/dev/null \
+        | grep -v "pythonscripts" \
+        | grep -v "Raspi25Temperatuur.png" \
+        > /tmp/temp_cron || true
 
-    # 2. De nieuwe regels toevoegen aan het tijdelijke bestand
-    echo "" >> temp_cron
-    echo "# Elke 15 minuten de sensor uitlezen" >> temp_cron
-    echo "0,15,30,45 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/temperatuurlogger.py" >> temp_cron
-    echo "" >> temp_cron
-    echo "# Elke 15 minuten de afbeelding verversen" >> temp_cron
-    echo "1,16,31,46 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/BewaarTempGrafiek.py" >> temp_cron
-    echo "" >> temp_cron
-    echo "# Elke 15 minuten de afbeelding kopiëren naar webroot" >> temp_cron
-    echo "2,17,32,47 * * * * sudo cp ~/Raspi25Temperatuur.png /var/www/html/afbeeldingen/Raspi25Temperatuur.png" >> temp_cron
+    cat >> /tmp/temp_cron <<CRONEOF
 
-    # 3. Het tijdelijke bestand inladen als de nieuwe crontab
-    crontab temp_cron
-    rm temp_cron
+# --- DHT22 Datalogger (automatisch ingesteld) ---
+# Elke 15 minuten de sensor uitlezen
+0,15,30,45 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/temperatuurlogger.py
+# Elke 15 minuten de afbeelding verversen
+1,16,31,46 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/BewaarTempGrafiek.py
+# Elke 15 minuten de afbeelding kopieren naar webroot
+2,17,32,47 * * * * sudo cp ~/Raspi25Temperatuur.png /var/www/html/afbeeldingen/Raspi25Temperatuur.png
+CRONEOF
 
-    # 4. Cron service herstarten/activeren voor Trixie
-    sudo systemctl enable cron
-    sudo systemctl start cron
+    crontab /tmp/temp_cron
+    rm /tmp/temp_cron
 
-    echo "De regels zijn toegevoegd aan je crontab."
+    sudo systemctl enable cron 2>/dev/null || true
+    sudo systemctl start cron 2>/dev/null || true
+
+    echo "Cronjobs toegevoegd aan je crontab."
     echo "Controleer met: crontab -l"
 fi
 
-
+# -----------------------------------------------------------------
+# INSTALLATIE VOLTOOID
+# -----------------------------------------------------------------
 print_titel "INSTALLATIE VOLTOOID!"
-echo "Dashboard: http://$(hostname -I | awk '{print $1}')"
+IP=$(hostname -I | awk '{print $1}')
+echo "Dashboard     : http://$IP"
+echo "Database      : temperatures | gebruiker: logger | ww: paswoord"
+echo "Python venv   : $VENV"
+echo ""
+echo "Handige commando's:"
+echo "  Data bekijken : $VENV/bin/python ~/pythonscripts/toondata.py"
+echo "  Crontab check : crontab -l"
+echo "  Tabel resetten: mariadb -u logger -p -e \"TRUNCATE TABLE temperatures.temperaturedata;\""
+echo "============================================================="
