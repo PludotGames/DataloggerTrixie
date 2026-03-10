@@ -156,10 +156,53 @@ fi
 # -----------------------------------------------------------------
 # STAP 3: Database Configuratie
 # -----------------------------------------------------------------
-if stel_vraag "Stap 3: MariaDB Database en Tabel inrichten?"; then
+if stel_vraag "Stap 3: MariaDB beveiligen en Database + Tabel inrichten?"; then
     print_titel "STAP 3: DATABASE CONFIGURATIE"
 
-    sudo mariadb -u root <<_EOF_
+    ROOT_DB_PASS="stemdb"
+
+    # --- Detectie: is MariaDB al geconfigureerd? ---
+    # Test of root zonder wachtwoord kan inloggen (= verse installatie)
+    # Als dat lukt -> beveiligen + inrichten
+    # Als dat mislukt -> MariaDB is al beveiligd, alleen DB/tabel aanmaken
+    DB_REEDS_BEVEILIGD=false
+    if sudo mariadb -u root -e "SELECT 1;" &>/dev/null; then
+        DB_REEDS_BEVEILIGD=false
+        echo "Verse MariaDB installatie gedetecteerd -> beveiligen en inrichten..."
+    elif sudo mariadb -u root -p"${ROOT_DB_PASS}" -e "SELECT 1;" &>/dev/null; then
+        DB_REEDS_BEVEILIGD=true
+        echo "MariaDB al beveiligd met wachtwoord '$ROOT_DB_PASS' -> alleen DB/tabel controleren..."
+    else
+        echo ""
+        echo "MariaDB is al beveiligd met een onbekend wachtwoord."
+        read -p "  Voer het huidige MariaDB root wachtwoord in: " ROOT_DB_PASS
+        DB_REEDS_BEVEILIGD=true
+    fi
+
+    # --- 3a: MariaDB beveiligen (alleen bij verse installatie) ---
+    if [ "$DB_REEDS_BEVEILIGD" = false ]; then
+        echo "MariaDB beveiligen..."
+        sudo mariadb -u root <<_SECURE_
+-- Anonieme gebruikers verwijderen
+DELETE FROM mysql.user WHERE User='';
+-- Remote root login verbieden
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+-- Test database verwijderen
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';
+-- Root wachtwoord instellen
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_DB_PASS}';
+-- Privileges herladen
+FLUSH PRIVILEGES;
+_SECURE_
+        echo "MariaDB is beveiligd (root wachtwoord ingesteld op: $ROOT_DB_PASS)."
+    else
+        echo "Beveiliging overgeslagen (al geconfigureerd)."
+    fi
+
+    # --- 3b: Database, gebruiker en tabel aanmaken (altijd, IF NOT EXISTS is veilig) ---
+    echo "Database en tabel controleren/aanmaken..."
+    sudo mariadb -u root -p"${ROOT_DB_PASS}" <<_EOF_
 CREATE DATABASE IF NOT EXISTS temperatures;
 CREATE USER IF NOT EXISTS 'logger'@'localhost' IDENTIFIED BY 'paswoord';
 GRANT ALL PRIVILEGES ON temperatures.* TO 'logger'@'localhost';
@@ -174,6 +217,9 @@ CREATE TABLE IF NOT EXISTS temperaturedata (
 _EOF_
 
     echo "Database 'temperatures' en tabel 'temperaturedata' zijn gereed."
+    echo ""
+    echo "  MariaDB root wachtwoord : $ROOT_DB_PASS"
+    echo "  Logger gebruiker        : logger / paswoord"
 fi
 
 # -----------------------------------------------------------------
