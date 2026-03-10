@@ -21,7 +21,7 @@ REPO_DIR="$HOME/.datalogger_repo"
 BASH_DEST="$HOME/bashscripts"
 PYTHON_DEST="$HOME/pythonscripts"
 WEB_DEST="$HOME/web"
-VENV="$PYTHON_DEST/dhtvenv"
+VENV="$PYTHON_DEST/dhtenv"
 
 # -----------------------------------------------------------------
 # HULPFUNCTIES
@@ -283,18 +283,28 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
     # (zodat herinstallatie geen dubbele regels geeft)
     crontab -l 2>/dev/null \
         | grep -v "pythonscripts" \
-        | grep -v "Raspi25Temperatuur.png" \
+        | grep -v "afbeeldingen" \
         > /tmp/temp_cron || true
 
+    # Gebruik absolute paden op basis van $HOME (= /home/<gebruikersnaam>)
+    # zodat het script werkt ongeacht de naam van de gebruiker op de Pi
     cat >> /tmp/temp_cron <<CRONEOF
 
-# --- DHT22 Datalogger (automatisch ingesteld) ---
-# Elke 15 minuten de sensor uitlezen
-0,15,30,45 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/temperatuurlogger.py
-# Elke 15 minuten de afbeelding verversen
-1,16,31,46 * * * * ~/pythonscripts/dhtvenv/bin/python ~/pythonscripts/BewaarTempGrafiek.py
-# Elke 15 minuten de afbeelding kopieren naar webroot
-2,17,32,47 * * * * sudo cp ~/Raspi25Temperatuur.png /var/www/html/afbeeldingen/Raspi25Temperatuur.png
+# --- DHT22 Datalogger (automatisch ingesteld door install_datalogger.sh) ---
+# Elke 15 minuten: sensor uitlezen en opslaan in de database
+0,15,30,45 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/temperatuurlogger.py
+
+# Elke 15 minuten: daggrafiek genereren
+1,16,31,46 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibDagTemperatuur.py
+
+# Elke 15 minuten: weekgrafiek genereren
+2,17,32,47 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibWeekTemperatuur.py
+
+# Elke 15 minuten: all-time temperatuurgrafiek genereren
+3,18,33,48 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibAllTimeTemp.py
+
+# Elke 15 minuten: all-time vochtigheidsgraafiek genereren
+4,19,34,49 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotLibAllTimeVocht.py
 CRONEOF
 
     crontab /tmp/temp_cron
