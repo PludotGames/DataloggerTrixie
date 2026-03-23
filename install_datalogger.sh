@@ -145,7 +145,7 @@ if stel_vraag "Stap 2: Systeem updaten en software (Apache, PHP, MariaDB) instal
         libopenblas-dev \
         python3-dev \
         pkg-config \
-        libgpiod2
+        libgpiod3
 
     # Services activeren
     sudo systemctl enable --now apache2 mariadb 2>/dev/null || true
