@@ -4,7 +4,6 @@
 # Installatiescript voor Datalogger - Raspberry Pi OS (Trixie)
 # Met Data Migratie Module (Bookworm -> Trixie)
 # Bronnen: github.com/PludotGames/DataloggerTrixie
-# JMO 09/03/2026
 # =================================================================
 
 # Stop direct bij fouten
@@ -108,8 +107,9 @@ if stel_vraag "Stap 1: Bestanden ophalen van GitHub en organiseren?"; then
         echo "Repository gekloond."
     fi
 
-    # Doelmappen aanmaken
+    # Doelmappen aanmaken en eigendom toewijzen aan de echte gebruiker
     mkdir -p "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST"
+    chown -R "$REAL_USER:$REAL_USER" "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST" "$REPO_DIR"
 
     # Installatiescript en README naar bashscripts
     cp "$0" "$BASH_DEST/install_datalogger.sh" 2>/dev/null || true
