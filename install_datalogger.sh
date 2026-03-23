@@ -4,7 +4,7 @@
 # Installatiescript voor Datalogger - Raspberry Pi OS (Trixie)
 # Met Data Migratie Module (Bookworm -> Trixie)
 # Bronnen: github.com/PludotGames/DataloggerTrixie
-#PludotGames 23/03/2026
+# JMO 09/03/2026
 # =================================================================
 
 # Stop direct bij fouten
@@ -16,11 +16,22 @@ export DEBIAN_FRONTEND=noninteractive
 # -----------------------------------------------------------------
 # CONFIGURATIE
 # -----------------------------------------------------------------
+
+# Bepaal de echte gebruiker (ook als het script via sudo wordt uitgevoerd)
+if [ -n "$SUDO_USER" ]; then
+    REAL_USER="$SUDO_USER"
+elif [ -n "$LOGNAME" ] && [ "$LOGNAME" != "root" ]; then
+    REAL_USER="$LOGNAME"
+else
+    REAL_USER=$(logname 2>/dev/null || whoami)
+fi
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
 REPO_URL="https://github.com/PludotGames/DataloggerTrixie.git"
-REPO_DIR="$HOME/.datalogger_repo"
-BASH_DEST="$HOME/bashscripts"
-PYTHON_DEST="$HOME/pythonscripts"
-WEB_DEST="$HOME/web"
+REPO_DIR="$REAL_HOME/.datalogger_repo"
+BASH_DEST="$REAL_HOME/bashscripts"
+PYTHON_DEST="$REAL_HOME/pythonscripts"
+WEB_DEST="$REAL_HOME/web"
 VENV="$PYTHON_DEST/dhtenv"
 
 # -----------------------------------------------------------------
@@ -48,6 +59,7 @@ clear
 print_titel "Datalogger Installatie & Migratie (Trixie)"
 
 echo "GEPLANDE MAPPENSTRUCTUUR:"
+echo " - Gebruiker:      $REAL_USER ($REAL_HOME)"
 echo " - Scripts & Docs: $BASH_DEST"
 echo " - Python Logica:  $PYTHON_DEST"
 echo " - Web Design:     $WEB_DEST"
@@ -119,7 +131,7 @@ if stel_vraag "Stap 1: Bestanden ophalen van GitHub en organiseren?"; then
         echo "Geen web map gevonden in de repository (overgeslagen)."
     fi
 
-    echo "Bestanden zijn georganiseerd in $HOME."
+    echo "Bestanden zijn georganiseerd in $REAL_HOME."
 fi
 
 # -----------------------------------------------------------------
@@ -228,12 +240,12 @@ fi
 if stel_vraag "Stap 4: Python Virtual Environment (venv) instellen?"; then
     print_titel "STAP 4: PYTHON OMGEVING"
 
-    python3 -m venv "$VENV"
+    sudo -u "$REAL_USER" python3 -m venv "$VENV"
     echo "Virtual environment aangemaakt in $VENV."
 
     echo "Libraries installeren (Adafruit DHT, Matplotlib, MySQL)..."
-    "$VENV/bin/python" -m pip install --upgrade pip --quiet
-    "$VENV/bin/python" -m pip install --quiet \
+    sudo -u "$REAL_USER" "$VENV/bin/python" -m pip install --upgrade pip --quiet
+    sudo -u "$REAL_USER" "$VENV/bin/python" -m pip install --quiet \
         adafruit-circuitpython-dht \
         matplotlib \
         mysql-connector-python
@@ -255,7 +267,7 @@ if stel_vraag "Wil je nu data importeren van een andere (Bookworm) Raspberry Pi?
     echo "     sudo mysqldump -u root -p temperatures > ~/temperaturesdump_\$(date +%Y%m%d%H%M).sql"
     echo ""
     echo "  2. Kopieren naar deze Pi:"
-    echo "     scp ~/temperaturesdump_*.sql $USER@$IP_TRIXIE:~/"
+    echo "     scp ~/temperaturesdump_*.sql $REAL_USER@$IP_TRIXIE:~/"
     echo "-------------------------------------------------------------"
     echo "STAP B - VOER DIT UIT OP DEZE PI (TRIXIE) NA DE OVERDRACHT:"
     echo ""
@@ -264,7 +276,7 @@ if stel_vraag "Wil je nu data importeren van een andere (Bookworm) Raspberry Pi?
     echo ""
 
     # Zoek automatisch naar .sql bestanden in de home map
-    SQL_BESTANDEN=("$HOME"/*.sql)
+    SQL_BESTANDEN=("$REAL_HOME"/*.sql)
     if [ -e "${SQL_BESTANDEN[0]}" ]; then
         echo "Gevonden .sql bestanden in je home map:"
         for f in "${SQL_BESTANDEN[@]}"; do
@@ -273,7 +285,7 @@ if stel_vraag "Wil je nu data importeren van een andere (Bookworm) Raspberry Pi?
         echo ""
         if stel_vraag "Wil je nu een van deze bestanden importeren?"; then
             read -p "Voer de volledige bestandsnaam in (bijv. ~/temperaturesdump_202501.sql): " SQL_BESTAND
-            SQL_BESTAND="${SQL_BESTAND/#\~/$HOME}"
+            SQL_BESTAND="${SQL_BESTAND/#\~/$REAL_HOME}"
             if [ -f "$SQL_BESTAND" ]; then
                 echo "Importeren van $SQL_BESTAND ..."
                 sudo mariadb temperatures < "$SQL_BESTAND"
@@ -327,13 +339,11 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
 
     # Bestaande crontab ophalen maar oude regels van dit project verwijderen
     # (zodat herinstallatie geen dubbele regels geeft)
-    crontab -l 2>/dev/null > /tmp/temp_cron || true
+    sudo -u "$REAL_USER" crontab -l 2>/dev/null > /tmp/temp_cron || true
     grep -v "pythonscripts" /tmp/temp_cron | grep -v "afbeeldingen" > /tmp/temp_cron2 || true
     mv /tmp/temp_cron2 /tmp/temp_cron
 
-    # Gebruik absolute paden op basis van $HOME (= /home/<gebruikersnaam>)
-    # zodat het script werkt ongeacht de naam van de gebruiker op de Pi
-    # Variabelen uitbreiden naar absolute paden voor in de crontab
+    # Absolute paden uitbreiden zodat cron ze kan vinden (cron heeft geen shell-omgeving)
     VENV_ABS=$(realpath "$VENV")
     PYTHON_ABS=$(realpath "$PYTHON_DEST")
 
@@ -356,7 +366,7 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
 4,19,34,49 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotLibAllTimeVocht.py
 CRONEOF
 
-    crontab /tmp/temp_cron
+    sudo -u "$REAL_USER" crontab /tmp/temp_cron
     rm /tmp/temp_cron
 
     sudo systemctl enable cron 2>/dev/null || true
@@ -376,7 +386,7 @@ echo "Database      : temperatures | gebruiker: logger | ww: paswoord"
 echo "Python venv   : $VENV"
 echo ""
 echo "Handige commando's:"
-echo "  Data bekijken : $VENV/bin/python ~/pythonscripts/toondata.py"
+echo "  Data bekijken : $VENV/bin/python $PYTHON_DEST/toondata.py"
 echo "  Crontab check : crontab -l"
 echo "  Tabel resetten: mariadb -u logger -p -e \"TRUNCATE TABLE temperatures.temperaturedata;\""
 echo "============================================================="
