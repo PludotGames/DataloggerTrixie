@@ -73,7 +73,7 @@ def plot_temperatures(data):
     fig.tight_layout()
     #Export plot
     plt.draw()
-    fig.savefig('/var/www/html/TemperatuurLogger/Assets/WeekTemperatuur.png', dpi=100)
+    fig.savefig('/var/www/html/Assets/WeekTemperatuur.png', dpi=100)
 
 def main():
     """Main function"""
