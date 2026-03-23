@@ -4,7 +4,7 @@
 # Installatiescript voor Datalogger - Raspberry Pi OS (Trixie)
 # Met Data Migratie Module (Bookworm -> Trixie)
 # Bronnen: github.com/PludotGames/DataloggerTrixie
-# JMO 09/03/2026
+#PludotGames 23/03/2026
 # =================================================================
 
 # Stop direct bij fouten
@@ -327,30 +327,33 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
 
     # Bestaande crontab ophalen maar oude regels van dit project verwijderen
     # (zodat herinstallatie geen dubbele regels geeft)
-    crontab -l 2>/dev/null \
-        | grep -v "pythonscripts" \
-        | grep -v "afbeeldingen" \
-        > /tmp/temp_cron || true
+    crontab -l 2>/dev/null > /tmp/temp_cron || true
+    grep -v "pythonscripts" /tmp/temp_cron | grep -v "afbeeldingen" > /tmp/temp_cron2 || true
+    mv /tmp/temp_cron2 /tmp/temp_cron
 
     # Gebruik absolute paden op basis van $HOME (= /home/<gebruikersnaam>)
     # zodat het script werkt ongeacht de naam van de gebruiker op de Pi
+    # Variabelen uitbreiden naar absolute paden voor in de crontab
+    VENV_ABS=$(realpath "$VENV")
+    PYTHON_ABS=$(realpath "$PYTHON_DEST")
+
     cat >> /tmp/temp_cron <<CRONEOF
 
 # --- DHT22 Datalogger (automatisch ingesteld door install_datalogger.sh) ---
 # Elke 15 minuten: sensor uitlezen en opslaan in de database
-0,15,30,45 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/temperatuurlogger.py
+0,15,30,45 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/temperatuurlogger.py
 
 # Elke 15 minuten: daggrafiek genereren
-1,16,31,46 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibDagTemperatuur.py
+1,16,31,46 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotlibDagTemperatuur.py
 
 # Elke 15 minuten: weekgrafiek genereren
-2,17,32,47 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibWeekTemperatuur.py
+2,17,32,47 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotlibWeekTemperatuur.py
 
 # Elke 15 minuten: all-time temperatuurgrafiek genereren
-3,18,33,48 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotlibAllTimeTemp.py
+3,18,33,48 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotlibAllTimeTemp.py
 
 # Elke 15 minuten: all-time vochtigheidsgraafiek genereren
-4,19,34,49 * * * * $HOME/pythonscripts/dhtenv/bin/python $HOME/pythonscripts/MatplotLibAllTimeVocht.py
+4,19,34,49 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotLibAllTimeVocht.py
 CRONEOF
 
     crontab /tmp/temp_cron
