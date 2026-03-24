@@ -32,6 +32,7 @@ BASH_DEST="$REAL_HOME/bashscripts"
 PYTHON_DEST="$REAL_HOME/pythonscripts"
 WEB_DEST="$REAL_HOME/web"
 VENV="$PYTHON_DEST/dhtenv"
+AFBEELDINGEN_DIR="$REAL_HOME/Afbeeldingen"
 
 # -----------------------------------------------------------------
 # HULPFUNCTIES
@@ -62,6 +63,7 @@ echo " - Gebruiker:      $REAL_USER ($REAL_HOME)"
 echo " - Scripts & Docs: $BASH_DEST"
 echo " - Python Logica:  $PYTHON_DEST"
 echo " - Web Design:     $WEB_DEST"
+echo " - Afbeeldingen:   $AFBEELDINGEN_DIR"
 echo "============================================================="
 echo ""
 echo "BRONREPOSITORY:"
@@ -108,8 +110,9 @@ if stel_vraag "Stap 1: Bestanden ophalen van GitHub en organiseren?"; then
     fi
 
     # Doelmappen aanmaken en eigendom toewijzen aan de echte gebruiker
-    mkdir -p "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST"
-    chown -R "$REAL_USER:$REAL_USER" "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST" "$REPO_DIR"
+    mkdir -p "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST" "$AFBEELDINGEN_DIR"
+    chown -R "$REAL_USER:$REAL_USER" "$BASH_DEST" "$PYTHON_DEST" "$WEB_DEST" "$REPO_DIR" "$AFBEELDINGEN_DIR"
+    echo "Map $AFBEELDINGEN_DIR aangemaakt voor gegenereerde grafieken."
 
     # Installatiescript en README naar bashscripts
     cp "$0" "$BASH_DEST/install_datalogger.sh" 2>/dev/null || true
@@ -306,8 +309,8 @@ fi
 if stel_vraag "Stap 5: Web-ontwerp naar de webroot (/var/www/html) kopieren?"; then
     print_titel "STAP 5: WEBSERVER CONFIGURATIE"
 
-    # Benodigde mappen aanmaken
-    sudo mkdir -p /var/www/html/afbeeldingen
+    # Benodigde mappen aanmaken (inclusief Assets voor grafieken)
+    sudo mkdir -p /var/www/html/Assets
 
     # Standaard Apache index.html verwijderen indien aanwezig
     if [ -f /var/www/html/index.html ]; then
@@ -340,12 +343,13 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
     # Bestaande crontab ophalen maar oude regels van dit project verwijderen
     # (zodat herinstallatie geen dubbele regels geeft)
     sudo -u "$REAL_USER" crontab -l 2>/dev/null > /tmp/temp_cron || true
-    grep -v "pythonscripts" /tmp/temp_cron | grep -v "afbeeldingen" > /tmp/temp_cron2 || true
+    grep -v "pythonscripts" /tmp/temp_cron | grep -v "afbeeldingen" | grep -v "Assets" > /tmp/temp_cron2 || true
     mv /tmp/temp_cron2 /tmp/temp_cron
 
     # Absolute paden uitbreiden zodat cron ze kan vinden (cron heeft geen shell-omgeving)
     VENV_ABS=$(realpath "$VENV")
     PYTHON_ABS=$(realpath "$PYTHON_DEST")
+    AFBEELDINGEN_ABS=$(realpath "$AFBEELDINGEN_DIR")
 
     cat >> /tmp/temp_cron <<CRONEOF
 
@@ -364,6 +368,10 @@ if stel_vraag "Stap 6: Cronjobs instellen in jouw persoonlijke crontab?"; then
 
 # Elke 15 minuten: all-time vochtigheidsgraafiek genereren
 4,19,34,49 * * * * ${VENV_ABS}/bin/python ${PYTHON_ABS}/MatplotLibAllTimeVocht.py
+
+# Elke 15 minuten: grafieken kopiëren naar de webserver (na generatie)
+5,20,35,50 * * * * cp ${AFBEELDINGEN_ABS}/*.png /var/www/html/Assets/ 2>/dev/null || true
+
 CRONEOF
 
     sudo -u "$REAL_USER" crontab /tmp/temp_cron
@@ -373,6 +381,7 @@ CRONEOF
     sudo systemctl start cron 2>/dev/null || true
 
     echo "Cronjobs toegevoegd aan je crontab."
+    echo "Grafieken worden elke 15 minuten gekopieerd van $AFBEELDINGEN_DIR naar /var/www/html/Assets/."
     echo "Controleer met: crontab -l"
 fi
 
@@ -384,6 +393,7 @@ IP=$(hostname -I | awk '{print $1}')
 echo "Dashboard     : http://$IP"
 echo "Database      : temperatures | gebruiker: logger | ww: paswoord"
 echo "Python venv   : $VENV"
+echo "Afbeeldingen  : $AFBEELDINGEN_DIR -> /var/www/html/Assets/"
 echo ""
 echo "Handige commando's:"
 echo "  Data bekijken : $VENV/bin/python $PYTHON_DEST/toondata.py"
