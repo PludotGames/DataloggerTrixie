@@ -61,4 +61,4 @@ plt.grid(True)
 plt.draw()
 
 # plt.show()
-fig.savefig('/home/pi20/Raspi20Vochtigheid.png', dpi=100)
+fig.savefig('~/Afbeeldingen/Raspi20Vochtigheid.png', dpi=100)
